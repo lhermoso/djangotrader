@@ -116,10 +116,10 @@ class Symbol(models.Model):
         td = RealTime()
         td.getSymbolId(self)
 
-    def update_quotes(self, num_bars=1):
+    def update_quotes(self, num_bars=1,interval=Interval.in_1_hour):
 
         historic = Historic()
-        historic.update_symbol(self, num_bars=num_bars)
+        historic.update_symbol(self, num_bars=num_bars,interval=interval)
 
     def get_quotes(self, timeframe="1H", lookback="YTD", dashboard=False):
         qs = self.get_historical(timeframe, lookback, True, get_quotes=True)

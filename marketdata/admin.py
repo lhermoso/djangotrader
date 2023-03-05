@@ -2,12 +2,17 @@ from django.contrib import admin
 from .models import *
 
 
-# Register your models here.
+@admin.action(description="Atualizar Cotações")
+def atualizar_cotacoes(modeladmin, request, queryset):
+    [asset.update_quotes(num_bars=1000) for asset in queryset]
+
 
 @admin.register(Symbol)
 class SymbolAdmin(admin.ModelAdmin):
     list_display = ["ticker", "name"]
     search_fields = ["ticker", "name"]
+
+    actions = [atualizar_cotacoes]
 
 
 @admin.register(Quote)

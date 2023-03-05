@@ -11,7 +11,7 @@ import pytz
 from django.apps import apps
 from tvDatafeed import Interval
 
-from .tradingview import Historic,RealTime
+from .tradingview import Historic, RealTime
 
 TRADINGVIEW_CHOICES = (("1", "forex"),
                        ("2", 'stock'),
@@ -26,7 +26,7 @@ class SymbolManager(models.Manager):
     def update_all_from_tradingview(self, num_bars=1, interval=Interval.in_1_hour):
         symbols = self.filter(Q(category="1") | Q(category="2"))
         historic = Historic(symbols=symbols)
-        historic.update_all_symbols(num_bars,interval)
+        historic.update_all_symbols(num_bars, interval)
 
 
 # Create your models here.
@@ -44,8 +44,6 @@ class QuoteManager(models.Manager):
         #     timezone.datetime.combine(quote.date, timezone.datetime.min.time()))) * 1000
         quote.date_timestamp = timezone.datetime.timestamp(quote.date) * 1000
         quote.save()
-
-
 
     def update_from_yahoo(self):
         symbols = Symbol.objects.filter(Q(category="1") | Q(category="2"))
@@ -76,7 +74,7 @@ class Broker(models.Model):
 
 class Category(models.Model):
     name = models.CharField(max_length=50)
-    yahoo_suffix = models.CharField(max_length=50,blank=True)
+    yahoo_suffix = models.CharField(max_length=50, blank=True)
 
     def __str__(self):
         return self.name
@@ -84,12 +82,13 @@ class Category(models.Model):
     class Meta:
         verbose_name_plural = "Categorias"
 
+
 class Symbol(models.Model):
-    broker = models.ForeignKey(Broker, on_delete=models.CASCADE, null=True, related_name="symbols",blank=True)
+    broker = models.ForeignKey(Broker, on_delete=models.CASCADE, null=True, related_name="symbols", blank=True)
     ticker = models.CharField(max_length=150)
-    name = models.CharField(max_length=150,blank=True)
-    currency = models.CharField(max_length=3,default="BRL")
-    country = models.CharField(max_length=3,default="BR")
+    name = models.CharField(max_length=150, blank=True)
+    currency = models.CharField(max_length=3, default="BRL")
+    country = models.CharField(max_length=3, default="BR")
     digits = models.IntegerField(default=5)
     standard_lot = models.IntegerField(default=100)
     tick_size = models.FloatField(default=0.01)
@@ -97,12 +96,8 @@ class Symbol(models.Model):
     bid = models.FloatField(default=0)
     ask = models.FloatField(default=0)
     enabled = models.BooleanField(default=True)
-    category = models.ForeignKey(Category,default=1,on_delete=models.CASCADE,related_name="symbols")
+    category = models.ForeignKey(Category, default=1, on_delete=models.CASCADE, related_name="symbols")
     seac_best_year = models.PositiveIntegerField(default=1)
-
-
-
-
 
     def __str__(self):
         return self.ticker
@@ -117,16 +112,14 @@ class Symbol(models.Model):
     def market(self):
         return self.category.name
 
-
     def update_broker(self):
         td = RealTime()
         td.getSymbolId(self)
 
-
-    def update_quotes(self,num_bars=1):
+    def update_quotes(self, num_bars=1):
 
         historic = Historic()
-        historic.update_symbol(self,num_bars=num_bars)
+        historic.update_symbol(self, num_bars=num_bars)
 
     def get_quotes(self, timeframe="1H", lookback="YTD", dashboard=False):
         qs = self.get_historical(timeframe, lookback, True, get_quotes=True)
@@ -193,8 +186,6 @@ class Symbol(models.Model):
     def get_price_perfomance(self):
 
         pass
-
-
 
     def get_sessions(self):
         pass

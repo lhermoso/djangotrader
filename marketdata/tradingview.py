@@ -23,7 +23,7 @@ class RealTime:
 
     def __init__(self):
         Symbol = apps.get_model("marketdata", "Symbol")
-        self.symbols = Symbol.objects.filter(Q(category="1") | Q(category="5"))
+        self.symbols = Symbol.objects.all()
 
     def search(self, query, type):
         res = requests.get(
@@ -97,6 +97,7 @@ class RealTime:
     def update_symbol(self, ticker, data,broker):
         Broker = apps.get_model("marketdata", "Broker")
         broker_db, created = Broker.objects.get_or_create(provider=broker)
+        print(data)
         currency = data["currency_code"] if "currency_code" in data else ''
         name = data["description"] if "description" in data else ''
         country = data["country"] if "country" in data else ''

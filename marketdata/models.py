@@ -99,6 +99,8 @@ class Symbol(models.Model):
     category = models.ForeignKey(Category, default=1, on_delete=models.CASCADE, related_name="symbols")
     seac_best_year = models.PositiveIntegerField(default=1)
 
+    objects = SymbolManager()
+
     def __str__(self):
         return self.ticker
 
@@ -123,11 +125,11 @@ class Symbol(models.Model):
 
     def get_quotes(self, timeframe="1H", lookback="YTD", dashboard=False):
         qs = self.get_historical(timeframe, lookback, True, get_quotes=True)
-        data = read_frame(qs, index_col="date", fieldnames=["date", "open", "high", "low", "close"])
+        data = read_frame(qs, fieldnames=["date", "open", "high", "low", "close"],index_col="date")
+        # data = data[data.index.map(lambda x: x.weekday() not in [5, 6])]
         data = data.resample(timeframe).agg({"open": 'first', "high": 'max', "low": 'min', "close": 'last'})
         data = data.dropna()
-        if "H" in timeframe:
-            data = data[data.index > "2022-01-04"]
+        # data = data[data.index.map(lambda x: x.weekday() not in [5, 6])]
         if not dashboard:
             return data
         data.reset_index(inplace=True)

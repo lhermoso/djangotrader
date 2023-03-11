@@ -126,5 +126,5 @@ STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # TRADINGVIEW
-TRADINGVIEW_USER = ''
-TRADINGVIEW_PASSWORD = ''
+TRADINGVIEW_USER = 'leoohermoso'
+TRADINGVIEW_PASSWORD = 'Leocabolota01*'

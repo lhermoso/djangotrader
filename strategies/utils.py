@@ -5,6 +5,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
+def sharpe_ratio(returns_port_accum, annualized=True):
+    sharpe = (returns_port_accum.mean() / returns_port_accum.std())
+
+    return sharpe * (252 ** (1 / 2)) if annualized else sharpe
+
+
 def volatility(ticker, log_retornos_periodo=5, limite=0.25, capital=500):
     symbol = Symbol.objects.get(ticker=ticker)
     data = symbol.quotes.values_list("close", flat=True).order_by("date")
@@ -34,4 +40,4 @@ def volatility(ticker, log_retornos_periodo=5, limite=0.25, capital=500):
     print(f"Retorno Total:{resultado_acumulado[-1]}")
     print(f"Sharpe Ratio Anualizado:{sharpe_ratio}")
 
-    return retornos_portifolio, resultado_acumulado, sharpe_ratio,sinais
+    return retornos_portifolio, resultado_acumulado, sharpe_ratio, sinais

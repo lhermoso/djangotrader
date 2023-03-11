@@ -123,7 +123,7 @@ class Symbol(models.Model):
         historic = Historic()
         historic.update_symbol(self, num_bars=num_bars,interval=interval)
 
-    def get_quotes(self, timeframe="1H", lookback="YTD", dashboard=False):
+    def get_quotes(self, timeframe="1H", lookback="All", dashboard=False):
         qs = self.get_historical(timeframe, lookback, True, get_quotes=True)
         data = read_frame(qs, fieldnames=["date", "open", "high", "low", "close"],index_col="date")
         # data = data[data.index.map(lambda x: x.weekday() not in [5, 6])]

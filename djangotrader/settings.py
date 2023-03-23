@@ -38,7 +38,8 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'marketdata.apps.MarketdataConfig',
-    'strategies.apps.StrategiesConfig'
+    'strategies.apps.StrategiesConfig',
+    "trader.apps.TraderConfig"
 ]
 
 MIDDLEWARE = [
@@ -126,5 +127,5 @@ STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # TRADINGVIEW
-TRADINGVIEW_USER = 'leoohermoso'
-TRADINGVIEW_PASSWORD = 'Leocabolota01*'
+TRADINGVIEW_USER = ''
+TRADINGVIEW_PASSWORD = ''

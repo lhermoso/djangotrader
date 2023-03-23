@@ -15,7 +15,7 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path
-
+admin.site.site_header = 'Django Trader'
 urlpatterns = [
     path('admin/', admin.site.urls),
 ]

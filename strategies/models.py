@@ -1,14 +1,15 @@
+import math
 import time
 
-import matplotlib.pyplot as plt
-from django.db import models
-from marketdata.models import Symbol
-from django.core.validators import MinValueValidator
-import pandas as pd
-import numpy as np
-import math
-from .utils import sharpe_ratio
 import fxcmpy
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from django.db import models
+from scipy import optimize
+
+from marketdata.models import Symbol
+from .utils import sharpe_ratio
 
 longs = None
 shorts = None
@@ -53,7 +54,6 @@ class Strategy(models.Model):
 
     class Meta:
         verbose_name_plural = "Strategies"
-
 
     def __str__(self):
         return self.name
@@ -163,7 +163,7 @@ class Player(models.Model):
         signals[sell.values] = -1
         signals[signals == 0] = np.nan
         signals = signals.ffill().fillna(0)
-        returns = data.close.pct_change()
+        returns = data.pct_change()
         returns_port = returns.multiply(signals.values, axis=0)
         returns_port_accum = returns_port.cumsum() * self.symbol.standard_lot
         sharpe = sharpe_ratio(returns_port)
@@ -191,3 +191,40 @@ class Param(models.Model):
 
     def __str__(self):
         return f'{self.name}:{self.value}'
+
+
+def run_optimize():
+    bounds = optimize.Bounds([3, 0], [40, 1])
+    for player in Player.objects.filter(enabled=True):
+        data = player.symbol.get_quotes("1min")
+        data = data.reset_index()
+        data = data.drop("date", axis=1)
+        res = optimize.dual_annealing(lambda x: backtest(data.close, x[0], x[1]), bounds)
+        player.params.filter(name="periods").update(value=int(res.x[0]))
+        player.params.filter(name="trigger").update(value=res.x[1])
+
+
+def backtest(data, periods, trigger, plot=False):
+    if np.isnan(periods) or np.isnan(trigger):
+        return 50
+    periods = int(periods)
+    log_ret = data.apply(math.log).diff(1).mul(100).fillna(0)
+    log_ret_accum = log_ret.rolling(periods).sum().fillna(0)
+    buy = (log_ret_accum > -trigger) & (log_ret_accum.shift(1) < -trigger)
+    sell = (log_ret_accum < trigger) & (log_ret_accum.shift(1) > trigger)
+    signals = pd.Series(np.zeros(log_ret.shape[0]))
+    num_trades = buy.sum() + sell.sum()
+    signals[buy.values] = 1
+    signals[sell.values] = -1
+    signals[signals == 0] = np.nan
+    signals = signals.ffill().fillna(0)
+    returns = data.pct_change()
+    returns_port = returns.shift(-1).multiply(signals.values, axis=0)
+    if plot:
+        returns_port_accum = returns_port.cumsum()
+        fig, axs = plt.subplots(2)
+        axs[0].plot(returns_port_accum)
+        axs[1].plot(log_ret_accum)
+        plt.show()
+    sharpe = sharpe_ratio(returns_port) * -1 * num_trades ** (1/2)
+    return 0 if np.isnan(sharpe) else sharpe

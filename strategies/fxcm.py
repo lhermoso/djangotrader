@@ -19,6 +19,10 @@ class FXCM(TradingStrategy):
     def account(self):
         pass
 
+    def transform_ticker(self,instrument):
+        return  f"{instrument[:3]}/{instrument[3:]}"
+
+
     def connect(self):
         login_data = Account.objects.filter(account=self.account).first()
         if login_data is None:
@@ -39,9 +43,9 @@ class FXCM(TradingStrategy):
         session_status_changed_callback = self.session_status_changed(live_history, instrument, True)
         session_status_changed_callback(self.fxcm.session, self.fxcm.session.session_status)
         self.fxcm.set_session_status_listener(session_status_changed_callback)
-        print("Getting history...")
+        print(f"{instrument}: Getting history...")
         history = self.fxcm.get_history(instrument, timeframe)
-        print("Updating history...")
+        print(f"{instrument}: Updating history...")
         live_history.history = history
         on_bar_added_callback(live_history.history)
 

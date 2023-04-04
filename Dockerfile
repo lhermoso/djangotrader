@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM python:3.7.16
+FROM python:3.7-alpine
 LABEL authors="leonardo"
 
 WORKDIR /app

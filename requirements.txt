@@ -68,3 +68,5 @@ webencodings
 websocket-client
 yfinance
 zipp
+tvdatafeed @ git+https://github.com/StreamAlpha/tvdatafeed.git@a7034f04509b67224618917c29272796e4fff858
+

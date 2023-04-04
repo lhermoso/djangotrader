@@ -7,5 +7,5 @@ COPY requirements.txt requirements.txt
 RUN pip install --upgrade pip
 RUN pip install -r requirements.txt
 COPY . .
-RUN pip install forexconnect
+#RUN pip install forexconnect
 CMD [ "python3", "manage.py" , "run_vol","&"]

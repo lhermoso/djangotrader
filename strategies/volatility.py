@@ -55,8 +55,9 @@ class Volatility(FXCM):
         else:
             self.account = account.account_id
         for player in self.players:
-            self.longs |= {player: None}
-            self.shorts |= {player: None}
+
+            self.longs.update({player: None})
+            self.shorts.update({player: None})
             self.start_trade(player)
 
     def on_start(self):
@@ -69,10 +70,10 @@ class Volatility(FXCM):
         player.refresh_from_db()
         trigger = player.params.get(name="trigger").value
         periods = int(player.params.get(name="periods").value)
-        if player.symbol.ticker not in self.data:
-            self.data |= {player.symbol.ticker: pricedata}
-        else:
-            self.data[player.symbol.ticker] = pricedata
+        # if player.symbol.ticker not in self.data:
+        #     self.data |= {player.symbol.ticker: pricedata}
+        # else:
+        #     self.data[player.symbol.ticker] = pricedata
 
         log_ret = pricedata['BidClose'].apply(math.log).diff().mul(100).fillna(0)
         log_ret_accum = log_ret.rolling(periods).sum().fillna(0)
@@ -95,7 +96,7 @@ class Volatility(FXCM):
         # print(f"{str(timezone.datetime.now())} {player.symbol.ticker}: {player.timeframe.full_name} Volatility:{log_ret_accum.iloc[-1]}...")
 
     def run_optimize(self, player):
-        bounds = optimize.Bounds([15, 0], [60, 1])
+        bounds = ((15,60),(0,1))
         ticker = self.transform_ticker(player.symbol.ticker)
         data = pd.DataFrame(self.fxcm.get_history(ticker, player.timeframe.name, quotes_count=2000))
         data = data.reset_index()

@@ -13,7 +13,7 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 class Command(BaseCommand):
     def handle(self, *args, **options):
         vol = Volatility(account=1571013)
-
+        input("Done! Press enter key to exit\n")
 
 
 

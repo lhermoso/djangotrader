@@ -93,6 +93,12 @@ class FXCM(TradingStrategy):
         except Exception as e:
             print("Failed")
 
+    def close_longs(self,instrument):
+        self.close_trades(instrument, fxcorepy.Constants.SELL)
+
+    def close_shorts(self,instrument):
+        self.close_trades(instrument, fxcorepy.Constants.BUY)
+
     def close_trades(self, instrument, side):
         instrument = f"{instrument[:3]}/{instrument[3:]}"
         table_manager = self.fxcm.table_manager
@@ -156,3 +162,5 @@ class FXCM(TradingStrategy):
                 return
 
         return _on_changed
+
+

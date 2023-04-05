@@ -20,6 +20,9 @@ class TradingStrategy(ABC):
     def on_bar(self, *args, **kwargs):
         pass
 
+    def __init__(self):
+        self.on_start()
+
 
     def on_tick(self):
         pass
@@ -29,6 +32,9 @@ class TradingStrategy(ABC):
     def players(self):
         pass
 
+    def _on_start(self):
+        self.orders = []
+        self.start()
 
     def start(self):
         pass
@@ -50,3 +56,11 @@ class TradingStrategy(ABC):
     @abstractmethod
     def sell(self, *args,**kwargs):
         pass
+
+    @property
+    def orders(self):
+        return self._orders
+
+    @orders.setter
+    def orders(self, value):
+        self._orders = value

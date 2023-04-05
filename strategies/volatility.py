@@ -88,7 +88,7 @@ class Volatility(FXCM):
 
     def on_bar(self, player, pricedata):
 
-        if timezone.now().minute % 15 == 0:
+        if timezone.now().minute % 5 == 0:
             signal = self.run_optimize(player)
         else:
             player.refresh_from_db()

@@ -5,6 +5,8 @@ import pandas as pd
 from django.utils import timezone
 from scipy import optimize
 
+from strategies.utils import sharpe_ratio
+
 try:
     from strategies.fxcm import FXCM
 except:
@@ -66,16 +68,22 @@ class Volatility(FXCM):
     def on_start(self):
         self.strategy = Volatility
 
-    def signal(self, data, periods, trigger, is_opt=False):
+    def signal(self, data, periods, trigger, is_opt=False,after_opt=False):
 
         log_ret = data.apply(math.log).diff().mul(100).fillna(0)
         log_ret_accum = log_ret.rolling(periods).sum().fillna(0)
         signals = pd.Series(np.zeros(log_ret.shape[0]))
         signals[((log_ret_accum > -trigger) & (log_ret_accum.shift(1) < -trigger)).values] = 1
         signals[((log_ret_accum < trigger) & (log_ret_accum.shift(1) > trigger)).values] = -1
-        if is_opt:
+        if is_opt or after_opt:
+            num_trades = signals[signals==1].sum() + signals[signals==-1].sum()
             signals[signals == 0] = np.nan
             signals = signals.ffill().fillna(0)
+            returns = data.pct_change()
+            if not after_opt:
+                returns_port = returns.shift(-1).multiply(signals.values, axis=0)
+                sharpe = sharpe_ratio(returns_port) * -1 * num_trades ** (1 / 2)
+                return 0 if np.isnan(sharpe) else sharpe
         return signals if is_opt else signals.iloc[-1]
 
     def on_bar(self, player, pricedata):
@@ -124,7 +132,7 @@ class Volatility(FXCM):
             trigger = player.params.get(name="trigger").value
             periods = int(player.params.get(name="periods").value)
 
-        return self.signal(data, periods, trigger)
+        return self.signal(data, periods, trigger,True,True)
 
 
 if __name__ == "__main__":

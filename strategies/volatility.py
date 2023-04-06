@@ -13,7 +13,7 @@ except:
     from strategies.fxcm import FXCM
 from strategies.models import Strategy
 import math
-from forexconnect import fxcorepy, Common
+from forexconnect import Common
 
 warnings.filterwarnings("ignore")
 
@@ -44,15 +44,12 @@ class Volatility(FXCM):
     def account(self, value):
         self._account = value
 
-    def __init__(self, account):
+    def __init__(self, account,run_opt=False):
 
         super().__init__()
         self.account = account
         self.strategy = Strategy.objects.get(name="Volatility")
         self.players = self.strategy.players.filter(enabled=True)
-        self.longs = {}
-        self.shorts = {}
-        self.data = {}
         self.connect()
         account = Common.get_account(self.fxcm)
         if not account:
@@ -61,26 +58,32 @@ class Volatility(FXCM):
         else:
             self.account = account.account_id
         for player in self.players:
-            self.longs.update({player: None})
-            self.shorts.update({player: None})
+            if run_opt:
+                self.run_optimize(player)
             self.start_trade(player)
+
 
     def on_start(self):
         self.strategy = Volatility
 
-    def signal(self, data, periods, trigger, is_opt=False,after_opt=False):
-
+    def signal(self, data, periods, trigger, exit_trigger, is_opt=False, after_opt=False):
+        periods = int(periods)
         log_ret = data.apply(math.log).diff().mul(100).fillna(0)
         log_ret_accum = log_ret.rolling(periods).sum().fillna(0)
+        buy = (log_ret_accum > -trigger) & (log_ret_accum.shift(1) < -trigger)
+        sell = (log_ret_accum < trigger) & (log_ret_accum.shift(1) > trigger)
+        exit_long = log_ret_accum > exit_trigger
+        exit_short = log_ret_accum < -exit_trigger
         signals = pd.Series(np.zeros(log_ret.shape[0]))
-        signals[((log_ret_accum > -trigger) & (log_ret_accum.shift(1) < -trigger)).values] = 1
-        signals[((log_ret_accum < trigger) & (log_ret_accum.shift(1) > trigger)).values] = -1
         if is_opt or after_opt:
-            num_trades = signals[signals==1].sum() + signals[signals==-1].sum()
+            signals[buy.values] = 1
+            signals[sell.values] = -1
             signals[signals == 0] = np.nan
+            signals[(exit_long.values) | (exit_short.values)] = 0
             signals = signals.ffill().fillna(0)
-            returns = data.pct_change()
             if not after_opt:
+                num_trades = buy.sum() + sell.sum()
+                returns = data.pct_change()
                 returns_port = returns.shift(-1).multiply(signals.values, axis=0)
                 sharpe = sharpe_ratio(returns_port) * -1 * num_trades ** (1 / 2)
                 return 0 if np.isnan(sharpe) else sharpe
@@ -88,51 +91,54 @@ class Volatility(FXCM):
 
     def on_bar(self, player, pricedata):
 
-        if timezone.now().minute % 5 == 0:
+        if timezone.now().minute  % 15 == 0:
             signal = self.run_optimize(player)
         else:
             player.refresh_from_db()
             trigger = player.params.get(name="trigger").value
             periods = int(player.params.get(name="periods").value)
-            signal = self.signal(pricedata['BidClose'], periods, trigger)
-
-        # if player.symbol.ticker not in self.data:
-        #     self.data |= {player.symbol.ticker: pricedata}
-        # else:
-        #     self.data[player.symbol.ticker] = pricedata
+            exit_trigger = int(player.params.get(name="exit_trigger").value)
+            signal = self.signal(pricedata['BidClose'], periods, trigger, exit_trigger)
 
         if signal == 1:
-            self.close_shorts(player.symbol.ticker)
+            self.close_shorts()
             print(f"{player.symbol.ticker} BUY SIGNAL!")
-            self.buy(player.symbol.ticker, is_fx=player.symbol.broker.provider == "FX")
+            self.buy()
 
         elif signal == -1:
-            self.close_longs(player.symbol.ticker)
+            self.close_longs()
             print(f"{player.symbol.ticker} SELL SIGNAL!")
-            self.sell(player.symbol.ticker, is_fx=player.symbol.broker.provider == "FX")
+            self.sell()
 
-        print(f"{str(timezone.datetime.now())} {player.symbol.ticker}: {player.timeframe.full_name} Volatility:{signal}...")
+        else:
+            self.close_longs()
+            self.close_shorts()
+
+        print(
+            f"{str(timezone.datetime.now())} {player.symbol.ticker}: {player.timeframe.full_name} Signal:{signal}...")
 
     def run_optimize(self, player):
-        bounds = optimize.Bounds([15, 0], [60, 1])
+        bounds = ([15, 60], [0, 1], [0, 1])
         ticker = self.transform_ticker(player.symbol.ticker)
-        data = pd.DataFrame(self.fxcm.get_history(ticker, player.timeframe.name, quotes_count=480))
+        data = pd.DataFrame(self.fxcm.get_history(ticker, player.timeframe.name, quotes_count=5000))
         data = data.reset_index()
         data = data.drop("Date", axis=1)
-        # res = optimize.shgo(lambda x: backtest(data.BidClose, x[0], x[1]), bounds, n=200, iters=5,sampling_method='sobol')
-        res = optimize.dual_annealing(lambda x: self.signal(data.BidClose, x[0], x[1], True), bounds)
+        res = optimize.dual_annealing(lambda x: self.signal(data.BidClose, x[0], x[1], x[2], True), bounds)
 
         if res.success:
             print(f"{player.symbol.ticker}: Optimization Success")
             periods = int(res.x[0])
             trigger = res.x[1]
+            exit_trigger = res.x[2]
             player.params.filter(name="periods").update(value=periods)
             player.params.filter(name="trigger").update(value=trigger)
+            player.params.filter(name="exit_trigger").update(value=exit_trigger)
         else:
             trigger = player.params.get(name="trigger").value
             periods = int(player.params.get(name="periods").value)
+            exit_trigger = player.params.get(name="exit_trigger").value
 
-        return self.signal(data, periods, trigger,True,True)
+        return self.signal(data.BidClose, periods, trigger, exit_trigger, True, True)
 
 
 if __name__ == "__main__":

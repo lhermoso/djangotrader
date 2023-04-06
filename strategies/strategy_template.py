@@ -64,3 +64,4 @@ class TradingStrategy(ABC):
     @orders.setter
     def orders(self, value):
         self._orders = value
+

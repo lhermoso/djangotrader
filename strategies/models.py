@@ -204,7 +204,7 @@ def run_optimize():
         player.params.filter(name="trigger").update(value=res.x[1])
 
 
-def backtest(data, periods, trigger, plot=False):
+def backtest(data, periods, trigger,exit_trigger, plot=False):
     if np.isnan(periods) or np.isnan(trigger):
         return 50
     periods = int(periods)
@@ -212,11 +212,14 @@ def backtest(data, periods, trigger, plot=False):
     log_ret_accum = log_ret.rolling(periods).sum().fillna(0)
     buy = (log_ret_accum > -trigger) & (log_ret_accum.shift(1) < -trigger)
     sell = (log_ret_accum < trigger) & (log_ret_accum.shift(1) > trigger)
+    exit_long = log_ret_accum > exit_trigger
+    exit_short = log_ret_accum < -exit_trigger
     signals = pd.Series(np.zeros(log_ret.shape[0]))
     num_trades = buy.sum() + sell.sum()
     signals[buy.values] = 1
     signals[sell.values] = -1
     signals[signals == 0] = np.nan
+    signals[(exit_long.values) | (exit_short.values)] = 0
     signals = signals.ffill().fillna(0)
     returns = data.pct_change()
     returns_port = returns.shift(-1).multiply(signals.values, axis=0)
@@ -225,6 +228,10 @@ def backtest(data, periods, trigger, plot=False):
         fig, axs = plt.subplots(2)
         axs[0].plot(returns_port_accum)
         axs[1].plot(log_ret_accum)
+        axs[1].axhline(y=trigger, color='r', linestyle='-')
+        axs[1].axhline(y=-trigger, color='r', linestyle='-')
+        axs[1].axhline(y=exit_trigger, color='b', linestyle='-')
+        axs[1].axhline(y=-exit_trigger, color='b', linestyle='-')
         plt.show()
     sharpe = sharpe_ratio(returns_port) * -1 * num_trades ** (1/2)
     return 0 if np.isnan(sharpe) else sharpe

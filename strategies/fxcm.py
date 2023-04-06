@@ -1,7 +1,8 @@
-from abc import ABC, abstractmethod
-from .strategy_template import TradingStrategy
-from trader.models import Account
 import warnings
+from abc import abstractmethod
+
+from trader.models import Account
+from .strategy_template import TradingStrategy
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 try:
@@ -19,9 +20,11 @@ class FXCM(TradingStrategy):
     def account(self):
         pass
 
-    def transform_ticker(self,instrument):
-        return  f"{instrument[:3]}/{instrument[3:]}"
+    def transform_ticker(self, instrument):
+        return f"{instrument[:3]}/{instrument[3:]}"
 
+    def get_instrument(self):
+        return self.transform_ticker(self.player.symbol.ticker)
 
     def connect(self):
         login_data = Account.objects.filter(account=self.account).first()
@@ -49,20 +52,23 @@ class FXCM(TradingStrategy):
         live_history.history = history
         on_bar_added_callback(live_history.history)
 
-    def buy(self, instrument, amount=1, is_fx=False):
-        self.create_open_market_order(instrument, amount, "B", is_fx)
+    def buy(self, amount=1):
+        self.create_open_market_order(amount, "B")
 
-    def sell(self, instrument, amount=1, is_fx=False):
-        self.create_open_market_order(instrument, amount, "S", is_fx)
+    def sell(self, amount=1):
+        self.create_open_market_order(amount, "S")
 
     def on_bar_added(self, player):
+        self.player = player
+
         def _on_bar_added(history):
             self.on_bar(player, history[:-1])
 
         return _on_bar_added
 
-    def create_open_market_order(self, instrument, lots, buy_sell, is_fx=False):
-        instrument = f"{instrument[:3]}/{instrument[3:]}"
+    def create_open_market_order(self, lots, buy_sell, is_fx=False):
+        instrument = self.get_instrument()
+
         try:
 
             offer = Common.get_offer(self.fxcm, instrument)
@@ -93,29 +99,48 @@ class FXCM(TradingStrategy):
         except Exception as e:
             print("Failed")
 
-    def close_longs(self,instrument):
-        self.close_trades(instrument, fxcorepy.Constants.SELL)
+    def close_longs(self):
+        self._close_trades(fxcorepy.Constants.SELL)
 
-    def close_shorts(self,instrument):
-        self.close_trades(instrument, fxcorepy.Constants.BUY)
+    def close_shorts(self):
+        self._close_trades(fxcorepy.Constants.BUY)
 
-    def close_trades(self, instrument, side):
-        instrument = f"{instrument[:3]}/{instrument[3:]}"
+    def close_all(self):
+
         table_manager = self.fxcm.table_manager
         orders_table = table_manager.get_table(ForexConnect.TRADES)
         response_listener = ResponseListener(self.fxcm.session)
         for trade in orders_table:
-            if trade.instrument == instrument and trade.buy_sell != side:
-                offer = Common.get_offer(self.fxcm, instrument)
-
-                order_id = None
+            if trade.open_order_request_txt == self.strategy.name:
+                offer = Common.get_offer(self.fxcm, trade.instrument)
+                side = fxcorepy.Constants.SELL if trade.buy_sell == fxcorepy.Constants.BUY else fxcorepy.Constants.BUY
                 request = self.fxcm.create_order_request(
                     order_type=fxcorepy.Constants.Orders.TRUE_MARKET_CLOSE,
                     OFFER_ID=offer.offer_id,
                     ACCOUNT_ID=self.account,
                     BUY_SELL=side,
                     AMOUNT=trade.amount,
-                    TRADE_ID=trade.trade_id
+                    TRADE_ID=trade.trade_id,
+                    CUSTOM_ID=self.strategy.name
+                )
+                self.fxcm.send_request_async(request, response_listener)
+
+    def _close_trades(self, side):
+        instrument = self.get_instrument()
+        table_manager = self.fxcm.table_manager
+        orders_table = table_manager.get_table(ForexConnect.TRADES)
+        response_listener = ResponseListener(self.fxcm.session)
+        for trade in orders_table:
+            if trade.instrument == instrument and trade.buy_sell != side and trade.open_order_request_txt == self.strategy.name:
+                offer = Common.get_offer(self.fxcm, instrument)
+                request = self.fxcm.create_order_request(
+                    order_type=fxcorepy.Constants.Orders.TRUE_MARKET_CLOSE,
+                    OFFER_ID=offer.offer_id,
+                    ACCOUNT_ID=self.account,
+                    BUY_SELL=side,
+                    AMOUNT=trade.amount,
+                    TRADE_ID=trade.trade_id,
+                    CUSTOM_ID=self.strategy.name
                 )
                 self.fxcm.send_request_async(request, response_listener)
 
@@ -128,9 +153,10 @@ class FXCM(TradingStrategy):
             nonlocal offers_listener
             nonlocal first_call
             nonlocal orders_listener
+
             if status == fxcorepy.AO2GSessionStatus.O2GSessionStatus.CONNECTED:
                 orders_table = self.fxcm.get_table(ForexConnect.ORDERS)
-                orders_listener = Common.subscribe_table_updates(orders_table)
+                orders_listener = Common.subscribe_table_updates(orders_table, on_add_callback=self.on_order_added)
 
                 offers = self.fxcm.get_table(ForexConnect.OFFERS)
                 if live_history is not None:
@@ -163,4 +189,10 @@ class FXCM(TradingStrategy):
 
         return _on_changed
 
-
+    def on_order_added(self, listener, row_id, row_data):
+        del listener, row_id
+        print("\nOrder has been added:")
+        print("OrderID = {0:s}, Type = {1:s}, BuySell = {2:s}, Rate = {3:.5f}, TimeInForce = {4:s}".format(
+            row_data.order_id, row_data.type,
+            row_data.buy_sell, row_data.rate,
+            row_data.time_in_force))

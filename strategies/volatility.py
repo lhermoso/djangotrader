@@ -85,15 +85,18 @@ class Volatility(FXCM):
         signals[sell.values] = -1
         signals[signals == 0] = np.nan
         signals[(exit_long.values) | (exit_short.values)] = 0
-        signals = signals.ffill().fillna(0)
+
 
         if is_opt:
+            signals = signals.ffill().fillna(0)
             num_trades = buy.sum() + sell.sum()
             returns = data.pct_change()
             returns_port = returns.shift(-1).multiply(signals.values, axis=0)
             sharpe = sharpe_ratio(returns_port) * -1 * num_trades ** (1 / 2)
             return 0 if np.isnan(sharpe) else sharpe
-        return signals.iloc[-1]
+        else:
+
+            return signals.iloc[-1]
 
     def on_bar(self, player, pricedata):
 
@@ -125,7 +128,7 @@ class Volatility(FXCM):
             print(f"{player.symbol.ticker}: Starting Optimization...")
             bounds = ([15, 60], [0, 1], [0, 1])
             ticker = self.transform_ticker(player.symbol.ticker)
-            data = pd.DataFrame(self.fxcm.get_history(ticker, player.timeframe.name, quotes_count=720))
+            data = pd.DataFrame(self.fxcm.get_history(ticker, player.timeframe.name, quotes_count=5000))
             data = data.reset_index()
             data = data.drop("Date", axis=1)
             res = optimize.dual_annealing(lambda x: self.signal(data.BidClose, x[0], x[1], x[2], True), bounds)

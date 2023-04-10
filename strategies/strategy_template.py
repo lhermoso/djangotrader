@@ -3,6 +3,7 @@ import time
 from django.utils import timezone
 
 
+
 class TradingStrategy(ABC):
 
     @property
@@ -26,6 +27,9 @@ class TradingStrategy(ABC):
 
     def on_tick(self):
         pass
+
+    def run_optimize(self,*args,**kwargs):
+        raise NotImplementedError("Subclass should implement this")
 
     @property
     @abstractmethod

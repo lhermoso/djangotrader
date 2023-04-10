@@ -1,3 +1,4 @@
+import multiprocessing as mp
 import warnings
 
 import numpy as np
@@ -44,7 +45,7 @@ class Volatility(FXCM):
     def account(self, value):
         self._account = value
 
-    def __init__(self, account,run_opt=False):
+    def __init__(self, account, run_opt=False):
 
         super().__init__()
         self.account = account
@@ -57,16 +58,20 @@ class Volatility(FXCM):
                 "The account '{0}' is not valid".format(self.account))
         else:
             self.account = account.account_id
+
         for player in self.players:
             if run_opt:
                 self.run_optimize(player)
-            self.start_trade(player)
+            else:
+                self.start_trade(player)
 
+        if run_opt:
+            self.fxcm.logout()
 
     def on_start(self):
         self.strategy = Volatility
 
-    def signal(self, data, periods, trigger, exit_trigger, is_opt=False, after_opt=False):
+    def signal(self, data, periods, trigger, exit_trigger, is_opt=False):
         periods = int(periods)
         log_ret = data.apply(math.log).diff().mul(100).fillna(0)
         log_ret_accum = log_ret.rolling(periods).sum().fillna(0)
@@ -75,70 +80,65 @@ class Volatility(FXCM):
         exit_long = log_ret_accum > exit_trigger
         exit_short = log_ret_accum < -exit_trigger
         signals = pd.Series(np.zeros(log_ret.shape[0]))
-        if is_opt or after_opt:
-            signals[buy.values] = 1
-            signals[sell.values] = -1
-            signals[signals == 0] = np.nan
-            signals[(exit_long.values) | (exit_short.values)] = 0
-            signals = signals.ffill().fillna(0)
-            if not after_opt:
-                num_trades = buy.sum() + sell.sum()
-                returns = data.pct_change()
-                returns_port = returns.shift(-1).multiply(signals.values, axis=0)
-                sharpe = sharpe_ratio(returns_port) * -1 * num_trades ** (1 / 2)
-                return 0 if np.isnan(sharpe) else sharpe
-        return signals if is_opt else signals.iloc[-1]
+
+        signals[buy.values] = 1
+        signals[sell.values] = -1
+        signals[signals == 0] = np.nan
+        signals[(exit_long.values) | (exit_short.values)] = 0
+        signals = signals.ffill().fillna(0)
+
+        if is_opt:
+            num_trades = buy.sum() + sell.sum()
+            returns = data.pct_change()
+            returns_port = returns.shift(-1).multiply(signals.values, axis=0)
+            sharpe = sharpe_ratio(returns_port) * -1 * num_trades ** (1 / 2)
+            return 0 if np.isnan(sharpe) else sharpe
+        return signals.iloc[-1]
 
     def on_bar(self, player, pricedata):
 
-        if timezone.now().minute  % 15 == 0:
-            signal = self.run_optimize(player)
-        else:
-            player.refresh_from_db()
-            trigger = player.params.get(name="trigger").value
-            periods = int(player.params.get(name="periods").value)
-            exit_trigger = int(player.params.get(name="exit_trigger").value)
-            signal = self.signal(pricedata['BidClose'], periods, trigger, exit_trigger)
+
+        player.refresh_from_db()
+        trigger = player.params.get(name="trigger").value
+        periods = int(player.params.get(name="periods").value)
+        exit_trigger = player.params.get(name="exit_trigger").value
+        signal = self.signal(pricedata['BidClose'], periods, trigger, exit_trigger)
 
         if signal == 1:
-            self.close_shorts()
             print(f"{player.symbol.ticker} BUY SIGNAL!")
-            self.buy()
+            self.close_shorts(player.symbol.ticker)
+            self.buy(player)
 
         elif signal == -1:
-            self.close_longs()
             print(f"{player.symbol.ticker} SELL SIGNAL!")
-            self.sell()
+            self.close_longs(player.symbol.ticker)
+            self.sell(player)
 
         else:
-            self.close_longs()
-            self.close_shorts()
+            self.close_longs(player.symbol.ticker)
+            self.close_shorts(player.symbol.ticker)
+        # print(
+        #     f"{str(timezone.datetime.now())} {player.symbol.ticker}: {player.timeframe.full_name} signal:{signal}")
 
-        print(
-            f"{str(timezone.datetime.now())} {player.symbol.ticker}: {player.timeframe.full_name} Signal:{signal}...")
+    def run_optimize(self, player, run=True):
+        if run:
+            print(f"{player.symbol.ticker}: Starting Optimization...")
+            bounds = ([15, 60], [0, 1], [0, 1])
+            ticker = self.transform_ticker(player.symbol.ticker)
+            data = pd.DataFrame(self.fxcm.get_history(ticker, player.timeframe.name, quotes_count=720))
+            data = data.reset_index()
+            data = data.drop("Date", axis=1)
+            res = optimize.dual_annealing(lambda x: self.signal(data.BidClose, x[0], x[1], x[2], True), bounds)
 
-    def run_optimize(self, player):
-        bounds = ([15, 60], [0, 1], [0, 1])
-        ticker = self.transform_ticker(player.symbol.ticker)
-        data = pd.DataFrame(self.fxcm.get_history(ticker, player.timeframe.name, quotes_count=5000))
-        data = data.reset_index()
-        data = data.drop("Date", axis=1)
-        res = optimize.dual_annealing(lambda x: self.signal(data.BidClose, x[0], x[1], x[2], True), bounds)
-
-        if res.success:
-            print(f"{player.symbol.ticker}: Optimization Success")
-            periods = int(res.x[0])
-            trigger = res.x[1]
-            exit_trigger = res.x[2]
-            player.params.filter(name="periods").update(value=periods)
-            player.params.filter(name="trigger").update(value=trigger)
-            player.params.filter(name="exit_trigger").update(value=exit_trigger)
-        else:
-            trigger = player.params.get(name="trigger").value
-            periods = int(player.params.get(name="periods").value)
-            exit_trigger = player.params.get(name="exit_trigger").value
-
-        return self.signal(data.BidClose, periods, trigger, exit_trigger, True, True)
+            if res.success:
+                print(f"{player.symbol.ticker}: Optimization Success")
+                periods = int(res.x[0])
+                trigger = res.x[1]
+                exit_trigger = res.x[2]
+                player.params.filter(name="periods").update(value=periods)
+                player.params.filter(name="trigger").update(value=trigger)
+                player.params.filter(name="exit_trigger").update(value=exit_trigger)
+            print(f"{player.symbol.ticker}: Starting Optimization done")
 
 
 if __name__ == "__main__":

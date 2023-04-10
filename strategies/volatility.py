@@ -117,7 +117,8 @@ class Volatility(FXCM):
             self.close_longs(player.symbol.ticker)
             self.sell(player)
 
-        else:
+
+        elif signal == 0:
             self.close_longs(player.symbol.ticker)
             self.close_shorts(player.symbol.ticker)
         # print(

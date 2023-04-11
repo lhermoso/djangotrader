@@ -1,9 +1,7 @@
-import multiprocessing as mp
 import warnings
 
 import numpy as np
 import pandas as pd
-from django.utils import timezone
 from scipy import optimize
 
 from strategies.utils import sharpe_ratio
@@ -60,6 +58,7 @@ class Volatility(FXCM):
             self.account = account.account_id
 
         for player in self.players:
+            self.orders.update({player: {"Long": False, "Short": False}})
             if run_opt:
                 self.run_optimize(player)
             else:
@@ -86,7 +85,6 @@ class Volatility(FXCM):
         signals[signals == 0] = np.nan
         signals[(exit_long.values) | (exit_short.values)] = 0
 
-
         if is_opt:
             signals = signals.ffill().fillna(0)
             num_trades = buy.sum() + sell.sum()
@@ -100,34 +98,39 @@ class Volatility(FXCM):
 
     def on_bar(self, player, pricedata):
 
-
         player.refresh_from_db()
         trigger = player.params.get(name="trigger").value
         periods = int(player.params.get(name="periods").value)
         exit_trigger = player.params.get(name="exit_trigger").value
         signal = self.signal(pricedata['BidClose'], periods, trigger, exit_trigger)
 
-        if signal == 1:
+        if signal == 1 and not self.orders[player]["Long"]:
             print(f"{player.symbol.ticker} BUY SIGNAL!")
             self.close_shorts(player.symbol.ticker)
             self.buy(player)
+            self.orders[player]["Long"] = True
+            self.orders[player]["Short"] = False
 
-        elif signal == -1:
+        elif signal == -1 and not self.orders[player]["Short"]:
             print(f"{player.symbol.ticker} SELL SIGNAL!")
             self.close_longs(player.symbol.ticker)
             self.sell(player)
+            self.orders[player]["Long"] = False
+            self.orders[player]["Short"] = True
 
 
         elif signal == 0:
             self.close_longs(player.symbol.ticker)
             self.close_shorts(player.symbol.ticker)
+            self.orders[player]["Long"] = False
+            self.orders[player]["Short"] = False
         # print(
         #     f"{str(timezone.datetime.now())} {player.symbol.ticker}: {player.timeframe.full_name} signal:{signal}")
 
     def run_optimize(self, player, run=True):
         if run:
             print(f"{player.symbol.ticker}: Starting Optimization...")
-            bounds = ([15, 60], [0, 1], [0, 1])
+            bounds = ([15, 60], [0, 0.2], [0.1, 0.3])
             ticker = self.transform_ticker(player.symbol.ticker)
             data = pd.DataFrame(self.fxcm.get_history(ticker, player.timeframe.name, quotes_count=5000))
             data = data.reset_index()

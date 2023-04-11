@@ -22,7 +22,7 @@ class TradingStrategy(ABC):
         pass
 
     def __init__(self):
-        self.on_start()
+        self._on_start()
 
 
     def on_tick(self):
@@ -37,19 +37,13 @@ class TradingStrategy(ABC):
         pass
 
     def _on_start(self):
-        self.orders = []
+        self.orders = {}
         self.start()
 
     def start(self):
         pass
 
-    @property
-    def player(self):
-        return self._player
 
-    @player.setter
-    def player(self, value):
-        self._player = value
 
     @property
     @abstractmethod
@@ -69,3 +63,10 @@ class TradingStrategy(ABC):
     def orders(self, value):
         self._orders = value
 
+    @property
+    def player(self):
+        return self._player
+
+    @player.setter
+    def player(self, value):
+        self._player = value

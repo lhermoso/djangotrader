@@ -196,8 +196,8 @@ class FXCM(TradingStrategy):
 
     def on_order_added(self, listener, row_id, row_data):
         del listener, row_id
-        print("\nOrder has been added:")
-        print("OrderID = {0:s}, Type = {1:s}, BuySell = {2:s}, Rate = {3:.5f}, TimeInForce = {4:s}".format(
-            row_data.order_id, row_data.type,
-            row_data.buy_sell, row_data.rate,
-            row_data.time_in_force))
+        # print("\nOrder has been added:")
+        # print("OrderID = {0:s}, Type = {1:s}, BuySell = {2:s}, Rate = {3:.5f}, TimeInForce = {4:s}".format(
+        #     row_data.order_id, row_data.type,
+        #     row_data.buy_sell, row_data.rate,
+        #     row_data.time_in_force))

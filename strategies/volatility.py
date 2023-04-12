@@ -1,5 +1,5 @@
 import warnings
-
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from scipy import optimize
@@ -70,7 +70,7 @@ class Volatility(FXCM):
     def on_start(self):
         self.strategy = Volatility
 
-    def signal(self, data, periods, trigger, exit_trigger, is_opt=False):
+    def signal(self, data, periods, trigger, exit_trigger, is_opt=False,plot=False):
         periods = int(periods)
         log_ret = data.apply(math.log).diff().mul(100).fillna(0)
         log_ret_accum = log_ret.rolling(periods).sum().fillna(0)
@@ -85,12 +85,19 @@ class Volatility(FXCM):
         signals[signals == 0] = np.nan
         signals[(exit_long.values) | (exit_short.values)] = 0
 
-        if is_opt:
+        if is_opt or plot:
             signals = signals.ffill().fillna(0)
             num_trades = buy.sum() + sell.sum()
             returns = data.pct_change()
             returns_port = returns.shift(-1).multiply(signals.values, axis=0)
-            sharpe = sharpe_ratio(returns_port) * -1 * num_trades ** (1 / 2)
+
+            sharpe = sharpe_ratio(returns_port) * -1
+            if plot:
+                returns_port_accum = returns_port.add(1).cumprod().sub(1)
+                returns_port_accum.plot(figsize=(20, 10))
+                plt.title(f"Retornos Acumulados| Sharpe Ratio {round(sharpe, 2)}")
+                plt.show()
+                return
             return 0 if np.isnan(sharpe) else sharpe
         else:
 
@@ -130,7 +137,7 @@ class Volatility(FXCM):
     def run_optimize(self, player, run=True):
         if run:
             print(f"{player.symbol.ticker}: Starting Optimization...")
-            bounds = ([15, 60], [0, 0.2], [0.1, 0.3])
+            bounds = ([15, 60], [0, 1], [0, 1])
             ticker = self.transform_ticker(player.symbol.ticker)
             data = pd.DataFrame(self.fxcm.get_history(ticker, player.timeframe.name, quotes_count=5000))
             data = data.reset_index()

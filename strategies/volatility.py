@@ -111,14 +111,14 @@ class Volatility(FXCM):
         exit_trigger = player.params.get(name="exit_trigger").value
         signal = self.signal(pricedata['BidClose'], periods, trigger, exit_trigger)
 
-        if signal == -1 and not self.orders[player]["Long"]:
+        if signal == 1 and not self.orders[player]["Long"] and player.factor > 0:
             print(f"{player.symbol.ticker} BUY SIGNAL!")
             self.close_shorts(player.symbol.ticker)
             self.buy(player,amount=100)
             self.orders[player]["Long"] = True
             self.orders[player]["Short"] = False
 
-        elif signal == 1 and not self.orders[player]["Short"]:
+        elif signal == -1 and not self.orders[player]["Short"] and player.factor > 0:
             print(f"{player.symbol.ticker} SELL SIGNAL!")
             self.close_longs(player.symbol.ticker)
             self.sell(player,amount=100)
@@ -126,7 +126,7 @@ class Volatility(FXCM):
             self.orders[player]["Short"] = True
 
 
-        elif signal == 0:
+        elif signal == 0 or player.factor ==0:
             self.close_longs(player.symbol.ticker)
             self.close_shorts(player.symbol.ticker)
             self.orders[player]["Long"] = False
@@ -152,6 +152,12 @@ class Volatility(FXCM):
                 player.params.filter(name="periods").update(value=periods)
                 player.params.filter(name="trigger").update(value=trigger)
                 player.params.filter(name="exit_trigger").update(value=exit_trigger)
+            sharpe = res.fun * -1
+            if sharpe < 1:
+                player.factor = 0
+            else:
+                player.factor = 1
+            player.save()
             print(f"{player.symbol.ticker}: Starting Optimization done")
 
 

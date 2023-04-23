@@ -145,14 +145,14 @@ class Volatility(FXCM):
         if signal == 1 and not self.orders[player]["Long"] and player.factor > 0:
             print(f"{player.symbol.ticker} BUY SIGNAL!")
             self.close_shorts(player.symbol.ticker)
-            self.buy(player, amount=100)
+            self.buy(player, amount=player.lot_size)
             self.orders[player]["Long"] = True
             self.orders[player]["Short"] = False
 
         elif signal == -1 and not self.orders[player]["Short"] and player.factor > 0:
             print(f"{player.symbol.ticker} SELL SIGNAL!")
             self.close_longs(player.symbol.ticker)
-            self.sell(player, amount=100)
+            self.sell(player, amount=player.lot_size)
             self.orders[player]["Long"] = False
             self.orders[player]["Short"] = True
 

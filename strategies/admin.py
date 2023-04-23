@@ -28,6 +28,6 @@ class StrategyAdmin(admin.ModelAdmin):
 
 @admin.register(Player)
 class PlayerAdmin(admin.ModelAdmin):
-    list_display = ["strategy", "symbol", "sharpe", "factor", "signal","enabled"]
+    list_display = ["strategy", "symbol", "timeframe", "sharpe", "factor", "signal", "enabled"]
     list_filter = ["strategy"]
     inlines = [ParamsInline]

@@ -63,7 +63,7 @@ class Player(models.Model):
     strategy = models.ForeignKey(Strategy, on_delete=models.CASCADE, related_name="players")
     timeframe = models.ForeignKey(Timeframe, on_delete=models.CASCADE, related_name="players")
     symbol = models.ForeignKey(Symbol, on_delete=models.CASCADE, related_name="players")
-    factor = models.FloatField(default=0.25)
+    factor = models.FloatField(default=0)
     sharpe = models.FloatField(default=0)
     signal = models.IntegerField(default=0)
     enabled = models.BooleanField(default=False)

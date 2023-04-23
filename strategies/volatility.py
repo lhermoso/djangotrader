@@ -107,10 +107,6 @@ class Volatility(FXCM):
             last = signals.iloc[-1]
             return last if last == 0 else np.nan
 
-
-
-
-
     def get_signal(self, player, price_data):
         player.refresh_from_db()
         trigger = player.params.get(name="trigger").value
@@ -131,9 +127,9 @@ class Volatility(FXCM):
                 periods = int(res.x[0])
                 trigger = res.x[1]
                 exit_trigger = res.x[2]
-                player.params.filter(name="periods").update(value=periods)
-                player.params.filter(name="trigger").update(value=trigger)
-                player.params.filter(name="exit_trigger").update(value=exit_trigger)
+                player.params.update_or_create(name="periods", defaults={"value": periods})
+                player.params.update_or_create(name="trigger", defaults={"value": trigger})
+                player.params.update_or_create(name="exit_trigger", defaults={"value": exit_trigger})
             sharpe = res.fun * -1
             if sharpe < 1 or sharpe is None:
                 player.factor = 0

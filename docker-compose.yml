@@ -1,4 +1,4 @@
-version: "3.7"
+version: "3.5"
 
 services:
   nginx:
@@ -6,7 +6,21 @@ services:
     command: python manage.py runserver 0.0.0.0:8000
     container_name: nginx
     volumes:
-       - ./app:/
+       - .:/django-trader
+       - ./nginx/lemon.army:/etc/letsencrypt/live/lemon.army/
     ports:
       - "80:80"
       - "443:443"
+  web:
+    build: .
+    command: gunicorn djangotrader.wsgi:application --bind :8000
+    container_name: web
+    volumes:
+      - .:/django-trader
+      - ./nginx/lemon.army:/etc/letsencrypt/live/lemon.army/
+    ports:
+      - "8000:8000"
+
+
+
+

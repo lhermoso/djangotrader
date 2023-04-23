@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1
-LABEL authors="leonardo"
 FROM debian:buster
 WORKDIR /app
 EXPOSE 8000

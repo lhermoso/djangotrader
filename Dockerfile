@@ -1,9 +1,13 @@
 # syntax=docker/dockerfile:1
 FROM debian:buster
+WORKDIR /app
+EXPOSE 8000
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 LABEL authors="leonardo"
 RUN apt-get update && apt install -y git python3 python3-pip cron
 
-WORKDIR /app
 COPY requirements.txt requirements.txt
 RUN pip3 install --upgrade pip
 RUN pip3 install -r requirements.txt

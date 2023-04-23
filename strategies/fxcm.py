@@ -4,6 +4,7 @@ from abc import abstractmethod
 from trader.models import Account
 from .strategy_template import TradingStrategy
 import multiprocessing as mp
+
 warnings.simplefilter(action='ignore', category=FutureWarning)
 try:
     from forexconnect import fxcorepy, ForexConnect, LiveHistory, ResponseListener, Common
@@ -46,24 +47,22 @@ class FXCM(TradingStrategy):
         session_status_changed_callback = self.session_status_changed(live_history, instrument, True)
         session_status_changed_callback(self.fxcm.session, self.fxcm.session.session_status)
         self.fxcm.set_session_status_listener(session_status_changed_callback)
-        print(f"{instrument}: Getting history...")
+        print(f"{instrument}: Getting history...", sep=" ")
         history = self.fxcm.get_history(instrument, timeframe)
-        print(f"{instrument}: Updating history...")
         live_history.history = history
+        print("done!")
         on_bar_added_callback(live_history.history)
 
     def buy(self, player, amount=1):
-        self.create_open_market_order(player,amount, "B")
+        self.create_open_market_order(player, amount, "B")
 
     def sell(self, player, amount=1):
-        self.create_open_market_order(player,amount, "S")
-
+        self.create_open_market_order(player, amount, "S")
 
     def on_bar_added(self, player):
         self.player = player
 
         def _on_bar_added(history):
-
             self.on_bar(player, history[:-1])
 
         return _on_bar_added
@@ -71,8 +70,6 @@ class FXCM(TradingStrategy):
     def create_open_market_order(self, player, lots, buy_sell):
         instrument = self.transform_ticker(player.symbol.ticker)
         is_fx = player.symbol.broker.provider == "FX"
-
-
         try:
 
             offer = Common.get_offer(self.fxcm, instrument)
@@ -104,11 +101,11 @@ class FXCM(TradingStrategy):
         except Exception as e:
             print("Failed")
 
-    def close_longs(self,instrument):
-        self._close_trades(fxcorepy.Constants.SELL,instrument)
+    def close_longs(self, instrument):
+        self._close_trades(fxcorepy.Constants.SELL, instrument)
 
-    def close_shorts(self,instrument):
-        self._close_trades(fxcorepy.Constants.BUY,instrument)
+    def close_shorts(self, instrument):
+        self._close_trades(fxcorepy.Constants.BUY, instrument)
 
     def close_all(self):
 
@@ -130,7 +127,7 @@ class FXCM(TradingStrategy):
                 )
                 self.fxcm.send_request_async(request, response_listener)
 
-    def _close_trades(self, side,instrument):
+    def _close_trades(self, side, instrument):
         instrument = self.transform_ticker(instrument)
         table_manager = self.fxcm.table_manager
         orders_table = table_manager.get_table(ForexConnect.TRADES)

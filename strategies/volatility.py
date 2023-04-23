@@ -8,7 +8,7 @@ from strategies.utils import sharpe_ratio
 
 try:
     from strategies.fxcm import FXCM
-except:
+except SystemError:
     from strategies.fxcm import FXCM
 from strategies.models import Strategy
 import math
@@ -70,32 +70,27 @@ class Volatility(FXCM):
     def on_start(self):
         self.strategy = Volatility
 
-    def signal(self, data, periods, trigger,exit_trigger, cost=0.1, is_opt=False, plot=False):
+    def signal(self, data, periods, trigger, exit_trigger, cost=0.1, is_opt=False, plot=False):
         cost /= 100
         if np.isnan(periods):
             return 0
         periods = int(periods)
         log_ret = data.apply(math.log).diff().mul(100).fillna(0)
-        log_ret_accum = log_ret.rolling(periods).sum().fillna(0)
-        buy = (log_ret_accum > -trigger) & (log_ret_accum.shift(1) < -trigger)
-        sell = (log_ret_accum < trigger) & (log_ret_accum.shift(1) > trigger)
-        exit_long = log_ret_accum > exit_trigger
-        exit_short = log_ret_accum < -exit_trigger
-        signals = pd.Series(np.zeros(log_ret.shape[0]))
-
+        log_ret_accum: pd.DataFrame = log_ret.rolling(periods).sum().fillna(0)
+        buy: pd.Series = (log_ret_accum > -trigger) & (log_ret_accum.shift(1) < -trigger)
+        sell: pd.Series = (log_ret_accum < trigger) & (log_ret_accum.shift(1) > trigger)
+        exit_long: pd.Series = log_ret_accum > exit_trigger
+        exit_short: pd.Series = log_ret_accum < -exit_trigger
         signals = pd.Series(np.zeros(log_ret.shape[0]))
         signals[buy.values] = 1
         signals[sell.values] = -1
         signals[signals == 0] = np.nan
-        signals[(exit_long.values) | (exit_short.values)] = 0
-
+        signals[exit_long.values | exit_short.values] = 0
         if is_opt or plot:
-
             signals = signals.ffill().fillna(0)
             cost = signals.diff().abs().fillna(0) * cost / 2
             returns = data.pct_change()
             returns_port = returns.shift(-1).multiply(signals.values, axis=0).sub(cost).ffill()
-
             sharpe = sharpe_ratio(returns_port) * -1
             if plot:
                 returns_port_accum = returns_port.add(1).cumprod().sub(1)
@@ -105,8 +100,23 @@ class Volatility(FXCM):
                 return
             return 0 if np.isnan(sharpe) else sharpe
         else:
+            last = signals.iloc[-1]
+            if not np.isnan(last):
+                return last
+            signals = signals.ffill().fillna(0)
+            last = signals.iloc[-1]
+            return last if last == 0 else np.nan
 
-            return signals.iloc[-1]
+
+
+
+
+    def get_signal(self, player, price_data):
+        player.refresh_from_db()
+        trigger = player.params.get(name="trigger").value
+        periods = int(player.params.get(name="periods").value)
+        exit_trigger = player.params.get(name="exit_trigger").value
+        return self.signal(price_data['BidClose'], periods, trigger, exit_trigger)
 
     def run_optimize(self, player, run=True):
         if run:
@@ -116,7 +126,6 @@ class Volatility(FXCM):
             data = pd.DataFrame(self.fxcm.get_history(ticker, player.timeframe.name, quotes_count=5000))
             res = optimize.dual_annealing(
                 lambda x: self.signal(data.BidClose, x[0], x[1], x[2], is_opt=True, cost=0.09), bounds)
-
             if res.success:
                 print(f"{player.symbol.ticker}: Optimization Success")
                 periods = int(res.x[0])
@@ -133,16 +142,10 @@ class Volatility(FXCM):
             if sharpe is not None:
                 player.sharpe = sharpe
             player.save()
-            print(f"{player.symbol.ticker}: Starting Optimization done! Sharpe: {round(sharpe,2)}")
+            print(f"{player.symbol.ticker}: Starting Optimization done! Sharpe: {round(sharpe, 2)}")
 
-    def on_bar(self, player, pricedata):
-
-        player.refresh_from_db()
-        trigger = player.params.get(name="trigger").value
-        periods = int(player.params.get(name="periods").value)
-        exit_trigger = player.params.get(name="exit_trigger").value
-        signal = self.signal(pricedata['BidClose'], periods, trigger, exit_trigger)
-
+    def on_bar(self, player, price_data):
+        signal = self.get_signal(player, price_data)
         if signal == 1 and not self.orders[player]["Long"] and player.factor > 0:
             print(f"{player.symbol.ticker} BUY SIGNAL!")
             self.close_shorts(player.symbol.ticker)
@@ -156,7 +159,6 @@ class Volatility(FXCM):
             self.sell(player, amount=100)
             self.orders[player]["Long"] = False
             self.orders[player]["Short"] = True
-
 
         elif signal == 0 or player.factor == 0:
             self.close_longs(player.symbol.ticker)

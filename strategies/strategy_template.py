@@ -3,7 +3,6 @@ import time
 from django.utils import timezone
 
 
-
 class TradingStrategy(ABC):
 
     @property
@@ -14,22 +13,26 @@ class TradingStrategy(ABC):
     @property
     @abstractmethod
     def on_start(self):
-        pass
+        raise NotImplementedError("Essa função tem que ser implementada")
 
     @property
     @abstractmethod
     def on_bar(self, *args, **kwargs):
-        pass
+        raise NotImplementedError("Essa função tem que ser implementada")
+
+    @property
+    @abstractmethod
+    def signal(self, *args, **kwargs):
+        raise NotImplementedError("Essa função tem que ser implementada")
 
     def __init__(self):
         self._on_start()
 
-
     def on_tick(self):
         pass
 
-    def run_optimize(self,*args,**kwargs):
-        raise NotImplementedError("Subclass should implement this")
+    def run_optimize(self, *args, **kwargs):
+        raise NotImplementedError("Essa função tem que ser implementada")
 
     @property
     @abstractmethod
@@ -43,16 +46,14 @@ class TradingStrategy(ABC):
     def start(self):
         pass
 
-
-
     @property
     @abstractmethod
-    def buy(self, *args,**kwargs):
+    def buy(self, *args, **kwargs):
         pass
 
     @property
     @abstractmethod
-    def sell(self, *args,**kwargs):
+    def sell(self, *args, **kwargs):
         pass
 
     @property

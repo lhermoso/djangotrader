@@ -23,9 +23,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'ja_@-4&*e1xui^u31(8-(@$#&b-ff8%cpmncf77h_9jm+m+ht#'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+DEBUG = True
 
-ALLOWED_HOSTS = ["lemon.army", "api.lemon.army"]
+ALLOWED_HOSTS = []
 
 # Application definition
 
@@ -131,10 +131,10 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 TRADINGVIEW_USER = 'leoohermoso@gmail.com'
 TRADINGVIEW_PASSWORD = '@GsSZ9d+Lp*Kga8'
 
-SECURE_HSTS_SECONDS = 3600 * 24 * 30 * 6
-SECURE_SSL_REDIRECT = True
-SESSION_COOKIE_SECURE = True
-CSRF_COOKIE_SECURE = True
-SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-SECURE_HSTS_PRELOAD = True
-SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+# SECURE_HSTS_SECONDS = 3600 * 24 * 30 * 6
+# SECURE_SSL_REDIRECT = True
+# SESSION_COOKIE_SECURE = True
+# CSRF_COOKIE_SECURE = True
+# SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+# SECURE_HSTS_PRELOAD = True
+# SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")

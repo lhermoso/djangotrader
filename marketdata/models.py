@@ -23,10 +23,20 @@ TRADINGVIEW_CHOICES = (("1", "forex"),
 
 class SymbolManager(models.Manager):
 
-    def update_all_from_tradingview(self, num_bars=1, interval=Interval.in_1_hour):
-        symbols = self.filter(Q(category="1") | Q(category="2"))
+    def update_all_from_tradingview(self, num_bars=1, interval=Interval.in_1_minute):
+        symbols = self.all()
         historic = Historic(symbols=symbols)
         historic.update_all_symbols(num_bars, interval)
+
+    def export_data(self):
+        Quote.objects.all().delete()
+        self.update_all_from_tradingview(20000)
+        symbols = self.all()
+        for symbol in symbols:
+            data = symbol.get_quotes("1Min")
+            data.to_csv(f"/home/leonardo/AlgoTrading/{symbol.ticker}_1minute.csv", index=False)
+
+
 
 
 # Create your models here.

@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from scipy import optimize
+from scipy.stats import zscore
 
 from strategies.utils import sharpe_ratio
 
@@ -70,13 +71,13 @@ class Volatility(FXCM):
     def on_start(self):
         self.strategy = Volatility
 
-    def signal(self, data, periods, trigger, exit_trigger, cost=0.1, is_opt=False, plot=False):
+    def signal(self, data, periods, trigger, exit_trigger, cost=0.1, is_opt=False, plot=False,player=None):
         cost /= 100
-        if np.isnan(periods):
+        if np.isnan(periods) :
             return 0
         periods = int(periods)
         log_ret = data.apply(math.log).diff().mul(100).fillna(0)
-        log_ret_accum: pd.DataFrame = log_ret.rolling(periods).sum().fillna(0)
+        log_ret_accum: np.ndarray = zscore(log_ret.rolling(periods).sum().fillna(0))
         buy: pd.Series = (log_ret_accum > -trigger) & (log_ret_accum.shift(1) < -trigger)
         sell: pd.Series = (log_ret_accum < trigger) & (log_ret_accum.shift(1) > trigger)
         exit_long: pd.Series = log_ret_accum > exit_trigger
@@ -105,19 +106,22 @@ class Volatility(FXCM):
                 return last
             signals = signals.ffill().fillna(0)
             last = signals.iloc[-1]
-            return last if last == 0 else np.nan
+            if last == 0 or last != player.signal:
+                return 0
+            else:
+                return np.nan
 
     def get_signal(self, player, price_data):
         player.refresh_from_db()
         trigger = player.params.get(name="trigger").value
         periods = int(player.params.get(name="periods").value)
         exit_trigger = player.params.get(name="exit_trigger").value
-        return self.signal(price_data['BidClose'], periods, trigger, exit_trigger)
+        return self.signal(price_data['BidClose'], periods, trigger, exit_trigger,player=player)
 
     def run_optimize(self, player, run=True):
         if run:
             print(f"{player.symbol.ticker}: Starting Optimization...")
-            bounds = ([15, 60], [0, 1], [0, 1])
+            bounds = ([15, 120], [0, 4], [0, 4])
             ticker = self.transform_ticker(player.symbol.ticker)
             data = pd.DataFrame(self.fxcm.get_history(ticker, player.timeframe.name, quotes_count=5000))
             res = optimize.dual_annealing(
@@ -163,7 +167,7 @@ class Volatility(FXCM):
             self.close_shorts(player.symbol.ticker)
             self.orders[player]["Long"] = False
             self.orders[player]["Short"] = False
-            player.signal = signal
+            player.signal = 0
         player.save()
 
 

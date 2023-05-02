@@ -135,6 +135,7 @@ class Volatility(FXCM):
                 player.params.update_or_create(name="trigger", defaults={"value": trigger})
                 player.params.update_or_create(name="exit_trigger", defaults={"value": exit_trigger})
             sharpe = res.fun * -1
+            player.refresh_from_db()
             if sharpe < 1 or sharpe is None:
                 player.factor = 0
             elif sharpe is not None:

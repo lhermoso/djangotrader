@@ -1,9 +1,10 @@
 import warnings
 from abc import abstractmethod
 
+import pandas as pd
+
 from trader.models import Account
 from .strategy_template import TradingStrategy
-import multiprocessing as mp
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 try:
@@ -198,3 +199,8 @@ class FXCM(TradingStrategy):
         #     row_data.order_id, row_data.type,
         #     row_data.buy_sell, row_data.rate,
         #     row_data.time_in_force))
+
+    def get_data(self, player):
+        data = pd.DataFrame(self.fxcm.get_history(self.transform_ticker(player.symbol.ticker), player.timeframe.name,
+                                                  quotes_count=5000))
+        return data

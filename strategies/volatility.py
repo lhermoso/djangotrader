@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from scipy import optimize
+from scipy.stats import linregress
 
 from strategies.utils import sharpe_ratio
 
@@ -71,18 +72,18 @@ class Volatility(FXCM):
     def on_start(self):
         self.strategy = Volatility
 
-    def signal(self, data, periods, trigger, exit_trigger, cost=0.1, is_opt=False, plot=False, player=None):
+    def signal(self, data, periods, trigger, exit_trigger, cost=0.1, is_opt=False, plot=False):
         cost /= 100
         if np.isnan(periods):
             return 0
         periods = int(periods)
-        exit_trigger = trigger * (1 + exit_trigger)
+        exit_level = trigger * (1 + exit_trigger)
         log_ret = data.apply(math.log).diff().mul(100).fillna(0)
         log_ret_accum: np.ndarray = log_ret.rolling(periods).sum().fillna(0)
         buy: pd.Series = (log_ret_accum > -trigger) & (log_ret_accum.shift(1) < -trigger)
         sell: pd.Series = (log_ret_accum < trigger) & (log_ret_accum.shift(1) > trigger)
-        exit_long: pd.Series = log_ret_accum > exit_trigger
-        exit_short: pd.Series = log_ret_accum < -exit_trigger
+        exit_long: pd.Series = log_ret_accum > exit_level
+        exit_short: pd.Series = log_ret_accum < -exit_level
         signals = pd.Series(np.zeros(log_ret.shape[0]))
         signals[buy.values] = 1
         signals[sell.values] = -1
@@ -92,66 +93,63 @@ class Volatility(FXCM):
             signals = signals.ffill().fillna(0)
             cost = signals.diff().abs().fillna(0) * cost / 2
             returns = data.pct_change()
-            returns_port = returns.shift(-1).multiply(signals.values, axis=0).sub(cost).ffill()
-            sharpe = sharpe_ratio(returns_port) * -1
+            returns_port = returns.shift(-1).multiply(signals.values, axis=0).sub(cost).ffill().fillna(0)
+            sharpe = sharpe_ratio(returns_port)
+            returns_port_accum = returns_port.add(1).cumprod().sub(1) * 100
+            if sharpe > 0:
+                result = linregress(returns_port_accum.index, returns_port_accum.values)
+                sharpe *= math.degrees(math.atan(result.slope)) * result.rvalue
+            sharpe *= -1
             if plot:
-                returns_port_accum = returns_port.add(1).cumprod().sub(1)
                 returns_port_accum.plot(figsize=(20, 10))
                 plt.title(f"Retornos Acumulados| Sharpe Ratio {round(sharpe * -1, 2)}")
                 plt.show()
                 return
             return 0 if np.isnan(sharpe) else sharpe
         else:
-            last = signals.iloc[-1]
-            if not np.isnan(last):
-                return last
-            signals = signals.ffill().fillna(0)
-            last = signals.iloc[-1]
-            if last == 0 or last != player.signal:
-                return 0
-            else:
-                return np.nan
+            return signals
 
-    def get_signal(self, player, price_data):
+    def get_signal(self, player, price_data=None, plot=False):
         player.refresh_from_db()
+        if price_data is None:
+            price_data = self.get_data(player)
+
         trigger = player.params.get(name="trigger").value
         periods = int(player.params.get(name="periods").value)
-        exit_trigger = int(player.params.get(name="exit_trigger").value)
+        exit_trigger = player.params.get(name="exit_trigger").value
+        signals = self.signal(price_data['BidClose'], periods, trigger, exit_trigger, plot=plot)
+        if plot:
+            return
 
-        return self.signal(price_data['BidClose'], periods, trigger, exit_trigger, player=player)
+        if player.signal == 0:
+            return signals.iloc[-1]
+
+        signals = signals.ffill().fillna(0)
+        return signals.iloc[-1]
 
     def plot(self, player):
-        data = pd.DataFrame(self.fxcm.get_history(self.transform_ticker(player.symbol.ticker), player.timeframe.name,
-                                                  quotes_count=5000))
-        player.refresh_from_db()
-        trigger = player.params.get(name="trigger").value
-        periods = int(player.params.get(name="periods").value)
-        exit_trigger = int(player.params.get(name="exit_trigger").value)
-
-        return self.signal(data['BidClose'], periods, trigger, exit_trigger, player=player, plot=True)
+        self.get_signal(player, plot=True)
 
     def run_optimize(self, player, run=True):
         if run:
             print(f"{player.symbol.ticker}: Starting Optimization...")
             bounds = ([15, 120], [0, 1], [0, 0.3])
-            ticker = self.transform_ticker(player.symbol.ticker)
-            data = pd.DataFrame(self.fxcm.get_history(ticker, player.timeframe.name, quotes_count=5000))
+            data = self.get_data(player)
             res = optimize.dual_annealing(
-                lambda x: self.signal(data.BidClose, x[0], x[1], x[2], is_opt=True, cost=0.09), bounds)
+                lambda x: self.signal(data.BidClose, x[0], x[1], x[2], is_opt=True, cost=0.1), bounds)
             if res.success:
                 print(f"{player.symbol.ticker}: Optimization Success")
                 periods = int(res.x[0])
                 trigger = res.x[1]
-
+                exit_trigger = res.x[2]
                 player.params.update_or_create(name="periods", defaults={"value": periods})
                 player.params.update_or_create(name="trigger", defaults={"value": trigger})
-                # player.params.update_or_create(name="exit_trigger", defaults={"value": exit_trigger})
+                player.params.update_or_create(name="exit_trigger", defaults={"value": exit_trigger})
             sharpe = res.fun * -1
             player.refresh_from_db()
-            if sharpe < 1 or sharpe is None:
+            player.factor = 1
+            if sharpe is None or sharpe < 1:
                 player.factor = 0
-            elif sharpe is not None:
-                player.factor = 1
             if sharpe is not None:
                 player.sharpe = sharpe
             player.save()

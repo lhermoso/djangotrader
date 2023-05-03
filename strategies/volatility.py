@@ -1,9 +1,9 @@
 import warnings
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from scipy import optimize
-from scipy.stats import zscore
 
 from strategies.utils import sharpe_ratio
 
@@ -71,13 +71,14 @@ class Volatility(FXCM):
     def on_start(self):
         self.strategy = Volatility
 
-    def signal(self, data, periods, trigger, exit_trigger, cost=0.1, is_opt=False, plot=False,player=None):
+    def signal(self, data, periods, trigger, exit_trigger, cost=0.1, is_opt=False, plot=False, player=None):
         cost /= 100
-        if np.isnan(periods) :
+        if np.isnan(periods):
             return 0
         periods = int(periods)
+        exit_trigger = trigger * (1 + exit_trigger)
         log_ret = data.apply(math.log).diff().mul(100).fillna(0)
-        log_ret_accum: np.ndarray = zscore(log_ret.rolling(periods).sum().fillna(0))
+        log_ret_accum: np.ndarray = log_ret.rolling(periods).sum().fillna(0)
         buy: pd.Series = (log_ret_accum > -trigger) & (log_ret_accum.shift(1) < -trigger)
         sell: pd.Series = (log_ret_accum < trigger) & (log_ret_accum.shift(1) > trigger)
         exit_long: pd.Series = log_ret_accum > exit_trigger
@@ -96,7 +97,7 @@ class Volatility(FXCM):
             if plot:
                 returns_port_accum = returns_port.add(1).cumprod().sub(1)
                 returns_port_accum.plot(figsize=(20, 10))
-                plt.title(f"Retornos Acumulados| Sharpe Ratio {round(sharpe, 2)}")
+                plt.title(f"Retornos Acumulados| Sharpe Ratio {round(sharpe * -1, 2)}")
                 plt.show()
                 return
             return 0 if np.isnan(sharpe) else sharpe
@@ -115,13 +116,24 @@ class Volatility(FXCM):
         player.refresh_from_db()
         trigger = player.params.get(name="trigger").value
         periods = int(player.params.get(name="periods").value)
-        exit_trigger = player.params.get(name="exit_trigger").value
-        return self.signal(price_data['BidClose'], periods, trigger, exit_trigger,player=player)
+        exit_trigger = int(player.params.get(name="exit_trigger").value)
+
+        return self.signal(price_data['BidClose'], periods, trigger, exit_trigger, player=player)
+
+    def plot(self, player):
+        data = pd.DataFrame(self.fxcm.get_history(self.transform_ticker(player.symbol.ticker), player.timeframe.name,
+                                                  quotes_count=5000))
+        player.refresh_from_db()
+        trigger = player.params.get(name="trigger").value
+        periods = int(player.params.get(name="periods").value)
+        exit_trigger = int(player.params.get(name="exit_trigger").value)
+
+        return self.signal(data['BidClose'], periods, trigger, exit_trigger, player=player, plot=True)
 
     def run_optimize(self, player, run=True):
         if run:
             print(f"{player.symbol.ticker}: Starting Optimization...")
-            bounds = ([15, 120], [0, 4], [0, 4])
+            bounds = ([15, 120], [0, 1], [0, 0.3])
             ticker = self.transform_ticker(player.symbol.ticker)
             data = pd.DataFrame(self.fxcm.get_history(ticker, player.timeframe.name, quotes_count=5000))
             res = optimize.dual_annealing(
@@ -130,10 +142,10 @@ class Volatility(FXCM):
                 print(f"{player.symbol.ticker}: Optimization Success")
                 periods = int(res.x[0])
                 trigger = res.x[1]
-                exit_trigger = res.x[2]
+
                 player.params.update_or_create(name="periods", defaults={"value": periods})
                 player.params.update_or_create(name="trigger", defaults={"value": trigger})
-                player.params.update_or_create(name="exit_trigger", defaults={"value": exit_trigger})
+                # player.params.update_or_create(name="exit_trigger", defaults={"value": exit_trigger})
             sharpe = res.fun * -1
             player.refresh_from_db()
             if sharpe < 1 or sharpe is None:
@@ -170,7 +182,6 @@ class Volatility(FXCM):
             self.orders[player]["Short"] = False
             player.signal = 0
         player.save()
-
 
 
 if __name__ == "__main__":

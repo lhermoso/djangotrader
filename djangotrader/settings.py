@@ -23,9 +23,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'ja_@-4&*e1xui^u31(8-(@$#&b-ff8%cpmncf77h_9jm+m+ht#'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["lemon.army","localhost","127.0.0.1"]
 
 # Application definition
 

@@ -1,3 +1,4 @@
 /nvenv/
 fxcm.cfg
 .env
+*.sqlite3

@@ -121,8 +121,8 @@ class Volatility(FXCM):
         if plot:
             return
 
-        if player.signal == 0:
-            return signals.iloc[-1]
+        # if player.signal == 0:
+        #     return signals.iloc[-1]
 
         signals = signals.ffill().fillna(0)
         return signals.iloc[-1]

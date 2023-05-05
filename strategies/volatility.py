@@ -148,7 +148,7 @@ class Volatility(FXCM):
             sharpe = res.fun * -1
             player.refresh_from_db()
             player.factor = 1
-            if sharpe is None or sharpe < 1:
+            if sharpe is None or sharpe < 0.5:
                 player.factor = 0
             if sharpe is not None:
                 player.sharpe = sharpe

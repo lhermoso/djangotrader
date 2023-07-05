@@ -2,3 +2,4 @@
 fxcm.cfg
 .env
 *.sqlite3
+**/.env

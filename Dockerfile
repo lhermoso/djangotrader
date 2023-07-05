@@ -1,17 +1,29 @@
-FROM debian:buster
-WORKDIR /app
+FROM debian:bookworm-slim as web
+LABEL maintainer="Leo Hermoso <leo@leohermoso.com.br>"
+
+WORKDIR /
 EXPOSE 8000
 
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
 
-RUN apt-get update && apt install -y git python3 python3-pip cron
+ENV PATH="/venv/bin:$PATH"
+ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONUNBUFFERED 1
 
-COPY requirements.txt requirements.txt
-RUN pip3 install --upgrade pip
-RUN pip3 install -r requirements.txt
+#Setup Inicial
+RUN mkdir -p DjangoTrader
+COPY ./app /DjangoTrader/app/
+COPY ./docker-entrypoint.sh /DjangoTrader/
 
-RUN crontab -l | { cat; echo "*/15 * * * 0-5 python /app/manage.py optimize_vol"; } | crontab -
-COPY . .
-CMD cron
-CMD [ "python3","-i","manage.py" , "start_vol"]
+
+RUN chmod +x /DjangoTrader/docker-entrypoint.sh
+
+WORKDIR /DjangoTrader
+
+
+
+RUN apt-get update && apt install -y git pkg-config python3 python3-pip cron mariadb-client libmariadb-dev python3-dev curl python3-gunicorn gunicorn python3-dev default-libmysqlclient-dev build-essential
+
+RUN pip install -r app/requirements.txt --break-system-packages
+RUN pip install python-dotenv --break-system-packages
+
+
